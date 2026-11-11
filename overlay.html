@@ -9,13 +9,15 @@ html,body{margin:0;background:transparent;overflow:hidden;font-family:-apple-sys
 body.preview{background:#3a6b3a linear-gradient(135deg,#2f5d2f,#4b8a4b)}
 body.preview::after{content:"Vista previa · en el directo el fondo es transparente";position:fixed;bottom:8px;left:8px;color:#fff;opacity:.7;font-size:12px}
 /* Todo escala con el ancho del widget: 1em = ancho/12.5 */
-#bug{font-size:calc(100vw / 15);display:none;width:100vw}
+#bug{font-size:calc(100vw / 15);display:none;width:100vw;box-sizing:border-box;padding:2px}
+#meas{position:absolute;left:-9999px;top:0;visibility:hidden;font-size:calc(100vw / 15)}
+#meas .nm{display:inline-block;font-weight:800;font-size:.6em;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;padding:0 .5em 0 .45em}
 .box{display:inline-block;max-width:100%}
-.title{display:inline-block;font-size:.4em;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:.3em .8em;margin-left:.6em;background:rgba(28,32,40,.85);color:#c9d1dc;border:1px solid rgba(205,214,228,.5);border-bottom:0;white-space:nowrap}
+.title{display:block;box-sizing:border-box;font-size:.4em;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:.35em 1.1em;background:rgba(26,30,38,.84);color:#c9d1dc;border:1px solid rgba(205,214,228,.6);border-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card{background:rgba(26,30,38,.84);border:1px solid rgba(205,214,228,.6);padding:.1em;box-shadow:0 .08em .35em rgba(0,0,0,.4)}
 .grid{display:grid;align-items:stretch;row-gap:.08em}
 .grid>div{height:1.3em;display:flex;align-items:center;justify-content:center}
-.grid>.nm{justify-content:flex-start;padding:0 .7em 0 .45em;font-weight:800;font-size:.6em;height:2.17em;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;color:#fff;max-width:20em;overflow:hidden}
+.grid>.nm{display:block;min-width:0;line-height:2.17em;padding:0 .5em 0 .45em;font-weight:800;font-size:.6em;height:2.17em;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;color:#fff;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .nm>*{flex:none}
 .nm .dim{color:#8f98a5}
 .nm.win::after{content:"  ✓";color:#4fb3f0}
@@ -72,12 +74,28 @@ function last(s){s=String(s||'').trim();const p=s.split(/\s+/);return p.length>1
 function sur(n){n=String(n||'').trim();const p=n.split(/\s+/);return p.length>1?p.slice(1).join(' '):n}
 function isSrv(d,t,i){return d.srvTeam===t&&(d.srvPlayer===i||(d.srvPlayer==null&&d.srvName===d.teams[t][i]))}
 function pl(d,t,i){const sv=isSrv(d,t,i),dim=d.srvTeam===t&&!sv;return`<span class="${dim?'dim':''}">${esc(sur(d.teams[t][i]))}</span>${sv?'<span class="ball"></span>':''}`}
+const BASE=30;let measCache={key:'',fs:BASE,w:0};
+// El tamaño depende solo de los nombres y del ancho del widget: no cambia con el saque ni con los puntos.
+function layout(d){
+  const maxSets=d.maxSets||3;
+  const key=JSON.stringify(d.teams)+'|'+innerWidth+'|'+maxSets;
+  if(measCache.key===key)return measCache;
+  let m=document.getElementById('meas');if(!m){m=document.createElement('div');m.id='meas';document.body.appendChild(m)}
+  m.style.fontSize=BASE+'px';
+  let w=0;
+  for(const t of[0,1]){m.innerHTML=`<span class="nm">${esc(sur(d.teams[t][0]))}&nbsp;/&nbsp;${esc(sur(d.teams[t][1]))}<span class="ball"></span></span>`;w=Math.max(w,m.firstChild.getBoundingClientRect().width)}
+  w=Math.ceil(w)+2;
+  const fullW=w+BASE*(1.38*maxSets+1.95+0.08*(maxSets+1)+0.2)+2; // ancho con todos los sets jugados
+  const scale=Math.min(2,(innerWidth-6)/fullW);
+  measCache={key,fs:BASE*scale,w:w*scale};return measCache;
+}
 function render(d){
   const bug=document.getElementById('bug');
   if(!d||!d.teams){return}
   document.getElementById('wait').style.display='none';bug.style.display='block';
   const nCols=d.sets.length+(!d.done&&!d.stb?1:0);
-  const cols=`auto ${'1.38em '.repeat(nCols)}${d.done?'':'1.95em'}`;
+  const L=layout(d);bug.style.fontSize=L.fs+'px';
+  const cols=`${L.w}px ${'1.38em '.repeat(nCols)}${d.done?'':'1.95em'}`;
   let cells='';
   for(const t of[0,1]){
     const a=pl(d,t,0),b=pl(d,t,1);

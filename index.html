@@ -406,7 +406,7 @@ function liveState(){
     teams:[[name('a1'),name('a2')],[name('b1'),name('b2')]],
     sets:S.sets.map(s=>({g:s.g,tb:s.tb,stb:!!s.stb})),
     g:S.g,p:lab,ptGold:DL.gold,tb:S.tb,stb:S.stb,srvTeam:srv?teamOf(srv):null,srvPlayer:srv?(srv[1]==='1'?0:1):null,srvName:srv?name(srv):null,
-    done:S.done,winner:S.winner,badges,pts:R.pts.length};
+    done:S.done,winner:S.winner,badges,pts:R.pts.length,maxSets:M.cfg.bestOf===1?1:3};
 }
 function livePublishNow(){
   if(!M||!M.live||!M.live.on||!R)return;
