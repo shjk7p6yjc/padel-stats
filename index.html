@@ -199,6 +199,13 @@ function isDecisive(S,cfg){
   if(cfg.deuce==='star')return S.deuces>=3;
   return false;
 }
+function dispLabels(S){const dl=deuceLabel(S);if(dl&&dl!=='PUNTO DE ORO'&&S.p[0]===S.p[1])return{l:[dl,dl],gold:true};return{l:ptLabels(S),gold:false}}
+function deuceLabel(S){
+  if(!M||S.tb||S.done)return'';
+  if(M.cfg.deuce==='star'){if(isDecisive(S,M.cfg))return'SP';if(S.deuces>=1)return'D'+S.deuces;return''}
+  if(M.cfg.deuce==='golden'&&isDecisive(S,M.cfg))return'PUNTO DE ORO';
+  return'';
+}
 function endSet(S,cfg,w,res){
   S.setsWon[w]++;S.g=[0,0];S.p=[0,0];S.tb=false;S.stb=false;S.deuces=0;
   const n=need(cfg);
@@ -355,22 +362,24 @@ function liveConnect(){
 }
 function lastName(s){s=String(s||'').trim();const p=s.split(/\s+/);return p.length>1?p.slice(1).join(' '):s}
 function liveState(){
-  const S=R.S,lab=ptLabels(S),srv=S.done?null:curServer(S);
-  let badge='';
+  const S=R.S,DL=dispLabels(S),lab=DL.l,srv=S.done?null:curServer(S);
+  const badges=[];
   if(!S.done){
     const L=lookahead(S,M.cfg);
-    if(L.f[0].match||L.f[1].match)badge='BOLA DE PARTIDO';
-    else if(L.f[0].set||L.f[1].set)badge='BOLA DE SET';
-    else if(L.bp)badge='BOLA DE BREAK';
-    else if(L.dec)badge=M.cfg.deuce==='star'?'STAR POINT':'PUNTO DE ORO';
-    else if(S.stb)badge='SÚPER TIE-BREAK';
-    else if(S.tb)badge='TIE-BREAK';
+    if(L.f[0].match||L.f[1].match)badges.push({t:'MATCH POINT',k:''});
+    else if(L.f[0].set||L.f[1].set)badges.push({t:'SET POINT',k:''});
+    else if(L.bp)badges.push({t:'BREAK POINT',k:''});
+    const dl=deuceLabel(S);
+    if(dl==='SP')badges.push({t:'STAR POINT',k:'gold'});
+    else if(dl==='PUNTO DE ORO')badges.push({t:dl,k:'gold'});
+    if(S.stb)badges.push({t:'SUPER TIE-BREAK',k:'soft'});
+    else if(S.tb)badges.push({t:'TIE-BREAK',k:'soft'});
   }
   return{v:1,ts:Date.now(),title:M.cfg.title||'',
     teams:[[name('a1'),name('a2')],[name('b1'),name('b2')]],
     sets:S.sets.map(s=>({g:s.g,tb:s.tb,stb:!!s.stb})),
-    g:S.g,p:lab,tb:S.tb,stb:S.stb,srvTeam:srv?teamOf(srv):null,srvName:srv?name(srv):null,
-    done:S.done,winner:S.winner,badge,pts:R.pts.length};
+    g:S.g,p:lab,ptGold:DL.gold,tb:S.tb,stb:S.stb,srvTeam:srv?teamOf(srv):null,srvPlayer:srv?(srv[1]==='1'?0:1):null,srvName:srv?name(srv):null,
+    done:S.done,winner:S.winner,badges,pts:R.pts.length};
 }
 function livePublishNow(){
   if(!M||!M.live||!M.live.on||!R)return;
@@ -451,12 +460,12 @@ function render(){
 }
 
 function scoreboard(){
-  const S=R.S,lab=ptLabels(S),srv=S.done?null:curServer(S);
+  const S=R.S,DL=dispLabels(S),lab=DL.l,srv=S.done?null:curServer(S);
   const row=t=>{
     const pl=t===0?['a1','a2']:['b1','b2'];
     let cells=S.sets.map(s=>{const won=s.g[t]>s.g[1-t];return`<td class="setc" style="${won?'color:var(--ink);font-weight:700':''}">${s.stb?s.tb[t]:s.g[t]}${s.tb&&!s.stb&&s.g[t]<s.g[1-t]?`<sup>${s.tb[t]}</sup>`:''}</td>`}).join('');
     if(!S.done&&!S.stb)cells+=`<td class="setc cur">${S.g[t]}</td>`;
-    return`<tr><td class="sw"><i style="background:var(--${t?'b':'a'})"></i></td><td class="tname">${pl.map(id=>`<span class="pl ${srv===id?'srv':''}">${esc(name(id))}</span>`).join('')}</td>${cells}${S.done?'':`<td class="ptc">${lab[t]}</td>`}</tr>`;
+    return`<tr><td class="sw"><i style="background:var(--${t?'b':'a'})"></i></td><td class="tname">${pl.map(id=>`<span class="pl ${srv===id?'srv':''}">${esc(name(id))}</span>`).join('')}</td>${cells}${S.done?'':`<td class="ptc" style="${DL.gold?'background:linear-gradient(180deg,#f3d36b,#c9971c);color:#2a1d00':''}">${lab[t]}</td>`}</tr>`;
   };
   return`<div class="card score"><table>${row(0)}${row(1)}</table></div>`;
 }
@@ -465,12 +474,13 @@ function badges(){
   const L=lookahead(S,M.cfg),b=[];
   if(S.stb)b.push('Súper tie-break');else if(S.tb)b.push('Tie-break');
   for(const t of[0,1]){
-    if(L.f[t].match)b.push(`<span class="badge hot">Bola de partido · ${t?'B':'A'}</span>`);
-    else if(L.f[t].set)b.push(`<span class="badge hot">Bola de set · ${t?'B':'A'}</span>`);
+    if(L.f[t].match)b.push(`<span class="badge hot">Match point · ${t?'B':'A'}</span>`);
+    else if(L.f[t].set)b.push(`<span class="badge hot">Set point · ${t?'B':'A'}</span>`);
   }
-  if(L.bp&&!L.f[1-L.st].set)b.push('<span class="badge hot">Bola de break</span>');
-  if(L.dec)b.push(`<span class="badge hot">${M.cfg.deuce==='star'?'Star point':'Punto de oro'}</span>`);
-  else if(!S.tb&&S.p[0]===S.p[1]&&S.p[0]>=3)b.push(`Iguales${M.cfg.deuce==='star'?' ('+S.deuces+'/3)':''}`);
+  if(L.bp&&!L.f[1-L.st].set)b.push('<span class="badge hot">Break point</span>');
+  const dl=deuceLabel(S);
+  if(dl==='SP'||dl==='PUNTO DE ORO')b.push(`<span class="badge" style="background:linear-gradient(180deg,#f3d36b,#c9971c);color:#2a1d00;border-color:#c9971c">${dl==='SP'?'Star point':'Punto de oro'}</span>`);
+  else if(!dl&&!S.tb&&S.p[0]===S.p[1]&&S.p[0]>=3)b.push('Iguales');
   return`<div class="badges">${b.map(x=>x.startsWith('<')?x:`<span class="badge">${x}</span>`).join('')}</div>`;
 }
 function renderLive(){
@@ -683,7 +693,9 @@ function renderSettings(){
    <div class="small muted">Pega esta URL en PRISM → Mi Estudio → Widget → Web, en el móvil que emite:</div>
    <div style="font:13px ui-monospace,Menlo,monospace;word-break:break-all;background:var(--surface-2);border-radius:10px;padding:10px;margin:6px 0 8px">${esc(overlayURL())}</div>
    <div class="grid2"><button class="btn" data-act="copyOverlay">Copiar URL</button><a class="btn" href="${esc(overlayURL())}&preview=1" target="_blank" rel="noopener" style="text-decoration:none">Vista previa</a></div>
-   <p class="small muted" style="margin:8px 0 0">El código del partido es <b>${esc(M.live?M.live.code:'')}</b>. Cada partido nuevo tiene su propia URL.</p></div>
+   <p class="small muted" style="margin:8px 0 0">El código del partido es <b>${esc(M.live?M.live.code:'')}</b>. Cada partido nuevo tiene su propia URL.</p>
+   <button class="btn danger" style="width:100%;margin-top:10px" data-act="wipeLive">Borrar marcadores antiguos de los servidores</button>
+   <p class="small muted" style="margin:6px 0 0">Borra de los servidores del directo todos los marcadores de esta app, menos el del partido actual. Tus estadísticas no se tocan.</p></div>
   <h3>Corregir orden de saque</h3><div class="card"><p class="small muted" style="margin:0 0 8px">Saca ahora: <b>${R.S.done?'—':esc(name(curServer(R.S)))}</b>. Si no coincide con la pista, corrígelo (se aplica desde ahora):</p>
    <div class="grid2"><button class="btn" data-act="swap0">Intercambiar sacadores A</button><button class="btn" data-act="swap1">Intercambiar sacadores B</button></div>
    <button class="btn" style="width:100%;margin-top:8px" data-act="nextsrv">Pasar saque a la otra pareja</button></div>
@@ -707,10 +719,32 @@ function findMatch(id){
   const l=lsGet('m.'+id);if(l){try{return JSON.parse(l)}catch(e){}}
   const c=cloud.list.find(d=>d.id===id);return c?clone(c.match):null;
 }
+function liveClear(code){
+  if(!code||!window.mqtt)return;
+  const topic=liveTopic(code);
+  const open=live.clients.filter(c=>c&&c.connected);
+  if(open.length){open.forEach(c=>{try{c.publish(topic,'',{retain:true,qos:1})}catch(e){}});return}
+  BROKERS.forEach(url=>{try{const c=mqtt.connect(url,{clientId:'psd_'+uid(),reconnectPeriod:0,connectTimeout:10000,clean:true});
+    c.on('connect',()=>c.publish(topic,'',{retain:true,qos:1},()=>setTimeout(()=>c.end(true),500)));c.on('error',()=>{try{c.end(true)}catch(e){}})}catch(e){}});
+}
+function liveWipeAll(){
+  if(!window.mqtt){toast('No hay conexión con los servidores',false);return}
+  const keep=M&&M.live&&M.live.on?liveTopic(M.live.code):null;
+  const found=new Set();let pending=BROKERS.length;
+  toast('Borrando marcadores de los servidores…',false);
+  BROKERS.forEach(url=>{
+    let c;try{c=mqtt.connect(url,{clientId:'psw_'+uid(),reconnectPeriod:0,connectTimeout:10000,clean:true})}catch(e){pending--;return}
+    c.on('connect',()=>c.subscribe('padelstats/v1/+/score',{qos:1}));
+    c.on('message',(topic,buf)=>{if(!buf||!buf.length||topic===keep)return;found.add(topic);c.publish(topic,'',{retain:true,qos:1})});
+    c.on('error',()=>{});
+    setTimeout(()=>{try{c.end(false)}catch(e){}if(--pending<=0)toast(found.size?`Borrados ${found.size} marcadores antiguos${keep?' (el partido actual se mantiene)':''}`:'No había marcadores antiguos guardados',false)},5000);
+  });
+}
 async function deleteMatch(id){
+  const dm=findMatch(id);if(dm&&dm.live)liveClear(dm.live.code);
   lsDel('m.'+id);cloud.list=cloud.list.filter(d=>d.id!==id);
   if(db){try{await db.doc('matches/'+id).delete()}catch(e){}}
-  if(M&&M.id===id){M=null;R=null;lsDel('current');ui.view='setup'}
+  if(M&&M.id===id){setTimeout(liveClose,1500);M=null;R=null;lsDel('current');ui.view='setup'}
   ui.delArm=null;render();
 }
 
@@ -825,6 +859,7 @@ document.addEventListener('click',e=>{
     case'json':download(fileBase()+'.json',JSON.stringify(M,null,1));break;
     case'copyJson':copy(JSON.stringify(M),'JSON');break;
     case'copySum':copy(summaryText(),'Resumen');break;
+    case'wipeLive':liveWipeAll();break;
     case'copyOverlay':copy(overlayURL(),'URL del overlay');break;
     case'closeModal':$('#modal').style.display='none';break;
   }
