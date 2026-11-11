@@ -10,26 +10,26 @@ body.preview{background:#3a6b3a linear-gradient(135deg,#2f5d2f,#4b8a4b)}
 body.preview::after{content:"Vista previa · en el directo el fondo es transparente";position:fixed;bottom:8px;left:8px;color:#fff;opacity:.7;font-size:12px}
 /* Todo escala con el ancho del widget: 1em = ancho/12.5 */
 #bug{font-size:calc(100vw / 15);display:none;width:100vw}
-.box{display:inline-block;background:rgba(10,18,34,.92);color:#fff;border-radius:.35em;overflow:hidden;box-shadow:0 .1em .4em rgba(0,0,0,.35);max-width:100%}
-.title{font-size:.42em;letter-spacing:.12em;text-transform:uppercase;padding:.35em .8em .25em;background:rgba(255,255,255,.08);color:#cfd6e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.grid{display:grid;align-items:stretch}
-.grid>div{height:1.45em;display:flex;align-items:center;justify-content:center}
-.grid>.r2{border-top:1px solid rgba(255,255,255,.12)}
-.stripe{width:.18em}
-.ball{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#d7ea2a;box-shadow:0 0 .3em rgba(215,234,42,.8);margin-right:.3em;vertical-align:.02em}
-.grid>.nm{justify-content:flex-start;padding:0 .55em 0 .55em;font-weight:700;font-size:.62em;height:2.34em;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:17em;display:block;line-height:2.34em}
-.nm.win::after{content:" ✓";color:#d7ea2a}
-.grid>.st{font-weight:600;font-size:.7em;height:2.07em;color:#9aa6bd;font-variant-numeric:tabular-nums;position:relative}
-.st.w{color:#fff}
-.st sup{font-size:.55em;position:absolute;top:.25em;right:.1em;color:#9aa6bd}
-.st.cur{color:#fff;font-weight:800;background:rgba(255,255,255,.07)}
-.grid>.pt{font-weight:800;font-size:.78em;height:1.86em;background:#d7ea2a;color:#0a1222;font-variant-numeric:tabular-nums}
-.grid>.pt.gold{background:linear-gradient(180deg,#f3d36b,#c9971c);color:#2a1d00}
-.grid>.pt.r2{border-top-color:rgba(10,18,34,.25)}
-.badges{display:flex}
-.badge{flex:1;font-size:.42em;font-weight:800;letter-spacing:.1em;padding:.35em .8em;background:#e8442e;color:#fff;text-align:center;text-transform:uppercase;white-space:nowrap}
-.badge.gold{background:linear-gradient(180deg,#f3d36b,#c9971c);color:#2a1d00;flex:none;min-width:4.5em}
-.badge.soft{background:#d7ea2a;color:#0a1222}
+.box{display:inline-block;max-width:100%}
+.title{display:inline-block;font-size:.4em;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:.3em .8em;margin-left:.6em;background:rgba(28,32,40,.85);color:#c9d1dc;border:1px solid rgba(205,214,228,.5);border-bottom:0;white-space:nowrap}
+.card{background:rgba(26,30,38,.84);border:1px solid rgba(205,214,228,.6);padding:.1em;box-shadow:0 .08em .35em rgba(0,0,0,.4)}
+.grid{display:grid;align-items:stretch;row-gap:.08em}
+.grid>div{height:1.3em;display:flex;align-items:center;justify-content:center}
+.grid>.nm{justify-content:flex-start;padding:0 .7em 0 .45em;font-weight:800;font-size:.6em;height:2.17em;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;color:#fff;max-width:20em;overflow:hidden}
+.nm>*{flex:none}
+.nm .dim{color:#8f98a5}
+.nm.win::after{content:"  ✓";color:#4fb3f0}
+.ball{display:inline-block;border-radius:50%;width:.62em;height:.62em;margin:0 .1em 0 .4em;background:radial-gradient(circle at 35% 35%,#f4ff7a,#c8d81c);box-shadow:0 0 .25em rgba(215,234,42,.6);vertical-align:.02em}
+.grid>.st{font-weight:800;font-size:.66em;height:1.97em;color:#8f98a5;background:rgba(255,255,255,.07);font-variant-numeric:tabular-nums;position:relative;margin-left:.08em}
+.st.w{color:#e8ecf2}
+.st sup{font-size:.55em;position:absolute;top:.2em;right:.12em;color:#8f98a5}
+.grid>.st.cur{color:#fff;background:rgba(255,255,255,.2)}
+.grid>.pt{font-weight:800;font-size:.68em;height:1.91em;background:#3a9ad9;color:#fff;font-variant-numeric:tabular-nums;margin-left:.08em}
+.badges{display:flex;gap:.08em;margin-top:.1em}
+.badge{flex:1;font-size:.4em;font-weight:800;letter-spacing:.12em;padding:.4em .8em;background:#d93a2b;color:#fff;text-align:center;text-transform:uppercase;white-space:nowrap}
+.badge.gold{background:linear-gradient(180deg,#f3d36b,#c9971c);color:#2a1d00}
+.badge.bp{background:#1c3f94;color:#fff}
+.badge.soft{background:#3a9ad9;color:#fff}
 #wait{color:#fff;font-size:14px;padding:8px;opacity:.75;text-shadow:0 1px 3px #000}
 </style>
 </head>
@@ -69,26 +69,27 @@ const BROKERS=['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mq
 let cur=null;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function last(s){s=String(s||'').trim();const p=s.split(/\s+/);return p.length>1?p[p.length-1]:s}
-function short(n){n=String(n||'').trim();const p=n.split(/\s+/);return p.length>1?p[0][0]+'. '+p.slice(1).join(' '):n}
-function pl(d,t,i){const sv=d.srvTeam===t&&(d.srvPlayer===i||(d.srvPlayer==null&&d.srvName===d.teams[t][i]));return(sv?'<span class="ball"></span>':'')+esc(short(d.teams[t][i]))}
+function sur(n){n=String(n||'').trim();const p=n.split(/\s+/);return p.length>1?p.slice(1).join(' '):n}
+function isSrv(d,t,i){return d.srvTeam===t&&(d.srvPlayer===i||(d.srvPlayer==null&&d.srvName===d.teams[t][i]))}
+function pl(d,t,i){const sv=isSrv(d,t,i),dim=d.srvTeam===t&&!sv;return`<span class="${dim?'dim':''}">${esc(sur(d.teams[t][i]))}</span>${sv?'<span class="ball"></span>':''}`}
 function render(d){
   const bug=document.getElementById('bug');
   if(!d||!d.teams){return}
   document.getElementById('wait').style.display='none';bug.style.display='block';
   const nCols=d.sets.length+(!d.done&&!d.stb?1:0);
-  const cols=`.18em auto ${'1.45em '.repeat(nCols)}${d.done?'':'2.15em'}`;
+  const cols=`auto ${'1.38em '.repeat(nCols)}${d.done?'':'1.95em'}`;
   let cells='';
   for(const t of[0,1]){
-    const r=t?' r2':'';
-    cells+=`<div class="stripe${r}" style="background:${t?'#eb6834':'#2a78d6'}"></div>`;
-    cells+=`<div class="nm${r} ${d.done&&d.winner===t?'win':''}">${pl(d,t,0)} / ${pl(d,t,1)}</div>`;
-    for(const s of d.sets){const won=s.g[t]>s.g[1-t];const v=s.stb?s.tb[t]:s.g[t];const sup=s.tb&&!s.stb&&!won?`<sup>${s.tb[t]}</sup>`:'';cells+=`<div class="st${r} ${won?'w':''}">${v}${sup}</div>`}
-    if(!d.done&&!d.stb)cells+=`<div class="st cur${r}">${d.g[t]}</div>`;
-    if(!d.done)cells+=`<div class="pt${r}${d.ptGold?' gold':''}">${esc(d.p[t])}</div>`;
+    const a=pl(d,t,0),b=pl(d,t,1);
+    // la bola va junto al que saca: si saca el primero, la bola queda entre los dos nombres
+    cells+=`<div class="nm ${d.done&&d.winner===t?'win':''}">${a}&nbsp;/&nbsp;${b}</div>`;
+    for(const s of d.sets){const won=s.g[t]>s.g[1-t];const v=s.stb?s.tb[t]:s.g[t];const sup=s.tb&&!s.stb&&!won?`<sup>${s.tb[t]}</sup>`:'';cells+=`<div class="st ${won?'w':''}">${v}${sup}</div>`}
+    if(!d.done&&!d.stb)cells+=`<div class="st cur">${d.g[t]}</div>`;
+    if(!d.done)cells+=`<div class="pt">${esc(d.p[t])}</div>`;
   }
   let badges=d.done?[{t:'FINAL',k:'soft'}]:(d.badges||(d.badge?[{t:d.badge,k:''}]:[]));
   const bh=badges.length?`<div class="badges">${badges.map(b=>`<div class="badge ${b.k||''}">${esc(b.t)}</div>`).join('')}</div>`:'';
-  bug.innerHTML=`<div class="box">${showTitle&&d.title?`<div class="title">${esc(d.title)}</div>`:''}<div class="grid" style="grid-template-columns:${cols}">${cells}</div>${bh}</div>`;
+  bug.innerHTML=`<div class="box">${showTitle&&d.title?`<div class="title">${esc(d.title)}</div>`:''}<div class="card"><div class="grid" style="grid-template-columns:${cols}">${cells}</div></div>${bh}</div>`;
 }
 const isPrev=!!q.get('preview');
 function dbg(t){if(!isPrev)return;let d=document.getElementById('dbg');if(!d){d=document.createElement('div');d.id='dbg';d.style.cssText='position:fixed;bottom:26px;left:8px;color:#fff;font-size:12px;opacity:.85';document.body.appendChild(d)}d.textContent=t}

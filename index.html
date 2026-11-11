@@ -199,7 +199,12 @@ function isDecisive(S,cfg){
   if(cfg.deuce==='star')return S.deuces>=3;
   return false;
 }
-function dispLabels(S){const dl=deuceLabel(S);if(dl&&dl!=='PUNTO DE ORO'&&S.p[0]===S.p[1])return{l:[dl,dl],gold:true};return{l:ptLabels(S),gold:false}}
+function dispLabels(S){
+  const dl=deuceLabel(S);
+  if(dl&&dl!=='PUNTO DE ORO'&&S.p[0]===S.p[1])return{l:[dl,dl],gold:false};
+  if(M&&M.cfg.deuce==='star'&&!S.tb&&S.deuces>=1&&S.p[0]!==S.p[1]&&S.p[0]>=3&&S.p[1]>=3){const ad='AD'+S.deuces;return{l:S.p[0]>S.p[1]?[ad,'40']:['40',ad],gold:false}}
+  return{l:ptLabels(S),gold:false};
+}
 function deuceLabel(S){
   if(!M||S.tb||S.done)return'';
   if(M.cfg.deuce==='star'){if(isDecisive(S,M.cfg))return'SP';if(S.deuces>=1)return'D'+S.deuces;return''}
@@ -268,6 +273,28 @@ function replay(){
 }
 
 /* ================= Estadísticas ================= */
+/* Índice de contribución (propio, inspirado en el de Padel Intelligence, cuya fórmula no es pública)
+   + winner / ace = +1 · error forzado provocado = +0,5 a cada rival del que falla
+   − error no forzado / doble falta = −1 · error forzado cometido = −0,25
+   Puntos clave (bola de break, set, partido, punto de oro / SP) valen ×1,5 */
+function contribution(pts){
+  const C={};IDS.forEach(id=>C[id]={plus:0,minus:0,key:0,keyN:0,idx:0,share:0});
+  const teamWon=[0,0];
+  const add=(id,v,key)=>{if(!id)return;if(v>0)C[id].plus+=v;else C[id].minus-=v;if(key){C[id].key+=v*0.5}};
+  for(const p of pts){
+    teamWon[p.w]++;
+    const key=!!(p.bp||p.dec||(p.sp&&(p.sp[0]||p.sp[1]))||(p.mp&&(p.mp[0]||p.mp[1])));
+    if(p.e==='W')add(p.pl,1,key);
+    else if(p.e==='ACE')add(p.server,1,key);
+    else if(p.e==='UE')add(p.pl,-1,key);
+    else if(p.e==='DF')add(p.server,-1,key);
+    else if(p.e==='FE'){add(p.pl,-0.25,key);const opp=teamOf(p.pl)?['a1','a2']:['b1','b2'];opp.forEach(o=>add(o,0.5,key))}
+    if(key&&p.e!=='X'){const ids=p.e==='FE'?[p.pl].concat(teamOf(p.pl)?['a1','a2']:['b1','b2']):[p.e==='ACE'||p.e==='DF'?p.server:p.pl];ids.forEach(i=>i&&C[i].keyN++)}
+  }
+  IDS.forEach(id=>{const c=C[id];c.idx=+(c.plus-c.minus+c.key).toFixed(2);c.share=teamWon[teamOf(id)]?Math.round(c.plus/teamWon[teamOf(id)]*100):0});
+  const order=IDS.slice().sort((a,b)=>C[b].idx-C[a].idx);
+  return{C,order,mvp:pts.length>=8?order[0]:null};
+}
 function computeStats(pts){
   const T=[0,1].map(()=>({pts:0,W:0,UE:0,FE:0,FEp:0,ACE:0,DF:0,X:0,s1:0,s1in:0,s1won:0,s2:0,s2won:0,srvPts:0,srvWon:0,retPts:0,retWon:0,bpOpp:0,bpWon:0,bpFaced:0,bpSaved:0,decPl:0,decWon:0,srvGames:0,held:0,streak:0,spWon:0}));
   const P={};IDS.forEach(id=>P[id]={W:0,UE:0,FE:0,ACE:0,DF:0,s1:0,s1in:0,s1won:0,s2:0,s2won:0,srvPts:0,srvWon:0,srvGames:0,held:0,sW:{},sUE:{},sFE:{}});
@@ -368,7 +395,7 @@ function liveState(){
     const L=lookahead(S,M.cfg);
     if(L.f[0].match||L.f[1].match)badges.push({t:'MATCH POINT',k:''});
     else if(L.f[0].set||L.f[1].set)badges.push({t:'SET POINT',k:''});
-    else if(L.bp)badges.push({t:'BREAK POINT',k:''});
+    else if(L.bp)badges.push({t:'BREAK POINT',k:'bp'});
     const dl=deuceLabel(S);
     if(dl==='SP')badges.push({t:'STAR POINT',k:'gold'});
     else if(dl==='PUNTO DE ORO')badges.push({t:dl,k:'gold'});
@@ -585,6 +612,7 @@ function insights(st,pts){
   if(T[0].decPl)out.push(`Puntos decisivos (${M.cfg.deuce==='star'?'star point':'punto de oro'}): A ${T[0].decWon} – B ${T[1].decWon}.`);
   const s1=IDS.filter(id=>P[id].s1>=6).map(id=>({id,v:pct(P[id].s1in,P[id].s1)})).sort((x,y)=>x.v-y.v);
   if(s1.length>=2)out.push(`1er saque: mejor ${esc(name(s1[s1.length-1].id))} (${s1[s1.length-1].v}%), peor ${esc(name(s1[0].id))} (${s1[0].v}%).`);
+  const ct=contribution(pts);if(ct.mvp)out.unshift(`MVP: <b>${esc(name(ct.mvp))}</b> (índice ${ct.C[ct.mvp].idx>0?'+':''}${ct.C[ct.mvp].idx}, ${ct.C[ct.mvp].share}% de los puntos de su pareja).`);
   const sk=T[0].streak>=T[1].streak?0:1;out.push(`Racha más larga: ${T[sk].streak} puntos seguidos de ${tshort(sk)}.`);
   return out;
 }
@@ -598,6 +626,12 @@ function renderReport(){
    <div class="res" style="margin-top:6px"><div><div style="font-weight:700"><span class="pdot" style="background:var(--a)"></span>${esc(tname(0))}${S.winner===0?' 🏆':''}</div><div style="font-weight:700;margin-top:4px"><span class="pdot" style="background:var(--b)"></span>${esc(tname(1))}${S.winner===1?' 🏆':''}</div></div>
    <div class="sets">${esc(scoreStr(S))}</div></div>${S.done?'':'<div class="small muted" style="margin-top:6px">En juego</div>'}</div>`;
   h+=`<div class="chips"><button class="${ui.rpt==='all'?'on':''}" data-rpt="all">Partido</button>${Array.from({length:nSets},(_,i)=>`<button class="${ui.rpt==i+1?'on':''}" data-rpt="${i+1}">Set ${i+1}</button>`).join('')}</div>`;
+  const CT=contribution(pts);
+  if(CT.mvp){const m=CT.mvp,c=CT.C[m];
+    h+=`<div class="card" style="background:linear-gradient(135deg,#f3d36b,#c9971c);color:#2a1d00;border-color:#c9971c"><div class="small" style="font-weight:700;letter-spacing:.08em">MVP ${ui.rpt==='all'?'DEL PARTIDO':'DEL SET '+ui.rpt}</div>
+     <div style="font-size:22px;font-weight:800;margin:2px 0">${esc(name(m))}</div>
+     <div class="small">Índice ${c.idx>0?'+':''}${c.idx} · generó el ${c.share}% de los puntos de su pareja · ${P[m].W} winners${P[m].ACE?`, ${P[m].ACE} ace${P[m].ACE>1?"s":""}`:''}, ${P[m].UE} ENF</div></div>`;
+  }
   const ins=insights(st,pts);
   h+=`<h3>Claves</h3><div class="card"><ul class="ins">${ins.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
   h+=`<h3>Momentum (diferencia de puntos)</h3><div class="card"><div class="legend"><span style="--c:var(--a)">Domina A</span><span style="--c:var(--b)">Domina B</span></div><div id="mchart"><div id="mtip"></div></div></div>`;
@@ -623,6 +657,12 @@ function renderReport(){
   // Cómo se ganaron los puntos
   const how=t=>{const tot=T[t].pts||1;return[['Winners + aces propios',T[t].W+T[t].ACE],['Error forzado del rival',T[1-t].FE],['ENF + DF del rival',T[1-t].UE+T[1-t].DF],['Sin detalle',T[t].X]].map(([l,v])=>`<tr><td>${l}</td><td>${v}</td><td>${Math.round(v/tot*100)}%</td></tr>`).join('')};
   h+=`<h3>Cómo se ganaron los puntos</h3><div class="card">${[0,1].map(t=>`<div style="font-weight:700;margin:${t?'12px':'0'} 0 4px"><span class="pdot" style="background:var(--${t?'b':'a'})"></span>${esc(tname(t))} · ${T[t].pts} pts</div><table class="tbl"><tbody>${how(t)}</tbody></table>`).join('')}</div>`;
+  // Índice de contribución
+  h+=`<h3>Índice de contribución</h3><div class="card scrollx"><table class="tbl"><thead><tr><th>Jugador</th><th>Aporta</th><th>Regala</th><th>Clave</th><th>Índice</th><th>% pareja</th></tr></thead><tbody>
+   ${CT.order.map((id,i)=>{const c=CT.C[id];return`<tr><td><span class="pdot" style="background:var(--${teamOf(id)?'b':'a'})"></span>${i===0&&CT.mvp?'🏅 ':''}${esc(name(id))}</td><td>+${+c.plus.toFixed(2)}</td><td>−${+c.minus.toFixed(2)}</td><td>${c.key>0?'+':''}${+c.key.toFixed(2)}</td><td style="font-weight:800;color:${c.idx>0?'var(--good)':c.idx<0?'var(--bad)':'inherit'}">${c.idx>0?'+':''}${c.idx}</td><td>${c.share}%</td></tr>`}).join('')}
+  </tbody></table>
+  ${CT.order.map(id=>{const c=CT.C[id];return`<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px"><span style="width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name(id).split(' ').slice(-1)[0])}</span><div style="flex:1;height:8px;background:var(--surface-2);border-radius:4px"><div style="width:${c.share}%;height:100%;background:var(--${teamOf(id)?'b':'a'});border-radius:4px"></div></div><span style="width:34px;text-align:right">${c.share}%</span></div>`}).join('')}
+  <p class="small muted" style="margin:10px 0 0"><b>Aporta</b>: winners y aces (+1), errores forzados provocados (+0,5 a cada rival). <b>Regala</b>: ENF y dobles faltas (−1), errores forzados cometidos (−0,25). <b>Clave</b>: extra por puntos de break, set, partido o decisivos (valen ×1,5). <b>% pareja</b>: parte de los puntos ganados por su pareja que generó él. Fórmula propia: la de Premier Padel / Padel Intelligence no es pública.</p></div>`;
   // Jugadores
   h+=`<h3>Jugadores</h3><div class="card scrollx"><table class="tbl"><thead><tr><th>Jugador</th><th>W</th><th>Aces</th><th>ENF</th><th>EF</th><th>DF</th><th>Bal.</th><th>1º%</th><th>Pts saque</th><th>Juegos saque</th></tr></thead><tbody>
    ${IDS.map(id=>{const p=P[id],b=p.W+p.ACE-p.UE-p.DF;return`<tr><td><span class="pdot" style="background:var(--${teamOf(id)?'b':'a'})"></span>${esc(name(id))}</td><td>${p.W}</td><td>${p.ACE}</td><td>${p.UE}</td><td>${p.FE}</td><td>${p.DF}</td><td style="font-weight:700;color:${b>0?'var(--good)':b<0?'var(--bad)':'inherit'}">${b>0?'+':''}${b}</td><td>${fmtPct(pct(p.s1in,p.s1))}</td><td>${p.srvPts?`${pct(p.srvWon,p.srvPts)}%`:'–'}</td><td>${frac(p.held,p.srvGames)}</td></tr>`}).join('')}
