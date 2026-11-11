@@ -695,6 +695,7 @@ function renderSettings(){
    <div class="grid2"><button class="btn" data-act="copyOverlay">Copiar URL</button><a class="btn" href="${esc(overlayURL())}&preview=1" target="_blank" rel="noopener" style="text-decoration:none">Vista previa</a></div>
    <p class="small muted" style="margin:8px 0 0">El código del partido es <b>${esc(M.live?M.live.code:'')}</b>. Cada partido nuevo tiene su propia URL.</p>
    <button class="btn danger" style="width:100%;margin-top:10px" data-act="wipeLive">Borrar marcadores antiguos de los servidores</button>
+   <div class="row" style="margin-top:8px"><input type="text" id="wipeCode" placeholder="Código, ej. m3kf7cvq" style="margin:0" autocapitalize="off" autocorrect="off"><button class="btn danger" style="min-height:46px;white-space:nowrap" data-act="wipeCode">Borrar código</button></div>
    <p class="small muted" style="margin:6px 0 0">Borra de los servidores del directo todos los marcadores de esta app, menos el del partido actual. Tus estadísticas no se tocan.</p></div>
   <h3>Corregir orden de saque</h3><div class="card"><p class="small muted" style="margin:0 0 8px">Saca ahora: <b>${R.S.done?'—':esc(name(curServer(R.S)))}</b>. Si no coincide con la pista, corrígelo (se aplica desde ahora):</p>
    <div class="grid2"><button class="btn" data-act="swap0">Intercambiar sacadores A</button><button class="btn" data-act="swap1">Intercambiar sacadores B</button></div>
@@ -727,19 +728,28 @@ function liveClear(code){
   BROKERS.forEach(url=>{try{const c=mqtt.connect(url,{clientId:'psd_'+uid(),reconnectPeriod:0,connectTimeout:10000,clean:true});
     c.on('connect',()=>c.publish(topic,'',{retain:true,qos:1},()=>setTimeout(()=>c.end(true),500)));c.on('error',()=>{try{c.end(true)}catch(e){}})}catch(e){}});
 }
-function liveWipeAll(){
+function brokerName(url){return /hivemq/.test(url)?'HiveMQ':'EMQX'}
+function liveWipe(codes){ // codes: array de códigos concretos, o null = todos
   if(!window.mqtt){toast('No hay conexión con los servidores',false);return}
   const keep=M&&M.live&&M.live.on?liveTopic(M.live.code):null;
-  const found=new Set();let pending=BROKERS.length;
-  toast('Borrando marcadores de los servidores…',false);
+  const res={};let pending=BROKERS.length;
+  showText('Borrando de los servidores…','Conectando…');
+  const report=()=>{const lines=BROKERS.map(u=>{const r=res[brokerName(u)]||{};return`${brokerName(u)}: ${r.err?'✗ '+r.err:r.ok?`✓ ${r.n} borrado(s)${r.list&&r.list.length?'\n   '+r.list.join(', '):''}`:'conectando…'}`});
+    const ta=document.querySelector('#sheet textarea');if(ta)ta.value=lines.join('\n')+(pending<=0?'\n\nTerminado. Vuelve a abrir el enlace antiguo añadiendo &v='+Date.now()%10000+' al final para evitar la caché.':'');};
   BROKERS.forEach(url=>{
-    let c;try{c=mqtt.connect(url,{clientId:'psw_'+uid(),reconnectPeriod:0,connectTimeout:10000,clean:true})}catch(e){pending--;return}
-    c.on('connect',()=>c.subscribe('padelstats/v1/+/score',{qos:1}));
-    c.on('message',(topic,buf)=>{if(!buf||!buf.length||topic===keep)return;found.add(topic);c.publish(topic,'',{retain:true,qos:1})});
-    c.on('error',()=>{});
-    setTimeout(()=>{try{c.end(false)}catch(e){}if(--pending<=0)toast(found.size?`Borrados ${found.size} marcadores antiguos${keep?' (el partido actual se mantiene)':''}`:'No había marcadores antiguos guardados',false)},5000);
+    const bn=brokerName(url);const r=res[bn]={ok:false,n:0,list:[]};let c;
+    const done=()=>{if(r.fin)return;r.fin=true;try{c&&c.end(false)}catch(e){}pending--;report()};
+    try{c=mqtt.connect(url,{clientId:'psw_'+uid(),reconnectPeriod:0,connectTimeout:10000,clean:true})}catch(e){r.err='no conecta';done();return}
+    const clear=topic=>{c.publish(topic,'',{retain:true,qos:1},err=>{if(!err){r.n++;r.list.push(topic.split('/')[2])}report()})};
+    c.on('connect',()=>{r.ok=true;report();
+      if(codes){codes.forEach(code=>clear(liveTopic(code)));setTimeout(done,3000)}
+      else{c.subscribe('padelstats/v1/+/score',{qos:1});setTimeout(done,6000)}});
+    c.on('message',(topic,buf)=>{if(!buf||!buf.length||topic===keep)return;clear(topic)});
+    c.on('error',e=>{r.err=(e&&e.message)||'error';done()});
+    setTimeout(()=>{if(!r.ok){r.err='no conecta';done()}},11000);
   });
 }
+function liveWipeAll(){liveWipe(null)}
 async function deleteMatch(id){
   const dm=findMatch(id);if(dm&&dm.live)liveClear(dm.live.code);
   lsDel('m.'+id);cloud.list=cloud.list.filter(d=>d.id!==id);
@@ -860,6 +870,7 @@ document.addEventListener('click',e=>{
     case'copyJson':copy(JSON.stringify(M),'JSON');break;
     case'copySum':copy(summaryText(),'Resumen');break;
     case'wipeLive':liveWipeAll();break;
+    case'wipeCode':{const v=($('#wipeCode').value||'').trim().toLowerCase().replace(/.*[?&]c=/,'').replace(/[^a-z0-9]/g,'');if(v)liveWipe([v]);else toast('Escribe el código del enlace',false);break}
     case'copyOverlay':copy(overlayURL(),'URL del overlay');break;
     case'closeModal':$('#modal').style.display='none';break;
   }

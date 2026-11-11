@@ -90,8 +90,11 @@ function render(d){
   const bh=badges.length?`<div class="badges">${badges.map(b=>`<div class="badge ${b.k||''}">${esc(b.t)}</div>`).join('')}</div>`:'';
   bug.innerHTML=`<div class="box">${showTitle&&d.title?`<div class="title">${esc(d.title)}</div>`:''}<div class="grid" style="grid-template-columns:${cols}">${cells}</div>${bh}</div>`;
 }
-function onMsg(topic,buf){
+const isPrev=!!q.get('preview');
+function dbg(t){if(!isPrev)return;let d=document.getElementById('dbg');if(!d){d=document.createElement('div');d.id='dbg';d.style.cssText='position:fixed;bottom:26px;left:8px;color:#fff;font-size:12px;opacity:.85';document.body.appendChild(d)}d.textContent=t}
+function onMsg(topic,buf,src){
   const txt=new TextDecoder().decode(buf);
+  if(isPrev)dbg('Último mensaje: '+(src||'?')+(txt?' · '+new Date((JSON.parse(txt)||{}).ts||0).toLocaleString('es-ES'):' · vacío (borrado)'));
   if(!txt){cur=null;document.getElementById('bug').style.display='none';const w=document.getElementById('wait');w.style.display='block';w.textContent='Partido borrado';return}
   try{const d=JSON.parse(txt);if(!cur||d.ts>=cur.ts){cur=d;render(d)}}catch(e){}
 }
@@ -103,7 +106,7 @@ else{
     try{
       const c=mqtt.connect(url,{clientId:'pso_'+Math.random().toString(36).slice(2,10),reconnectPeriod:3000,connectTimeout:10000,clean:true,keepalive:30});
       c.on('connect',()=>c.subscribe(topic,{qos:1}));
-      c.on('message',onMsg);
+      c.on('message',(t,b)=>onMsg(t,b,/hivemq/.test(url)?'HiveMQ':'EMQX'));
       c.on('error',()=>{});
     }catch(e){}
   });
